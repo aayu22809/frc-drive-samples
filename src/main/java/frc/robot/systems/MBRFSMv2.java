@@ -3,6 +3,7 @@ package frc.robot.systems;
 // WPILib Imports
 import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
+import edu.wpi.first.wpilibj2.command.Command;
 
 // Third party Hardware Imports
 import com.revrobotics.CANSparkMax;
@@ -16,6 +17,7 @@ import edu.wpi.first.wpilibj.Encoder;
 import frc.robot.TeleopInput;
 import frc.robot.HardwareMap;
 import frc.robot.LED;
+import frc.robot.MechConstants;
 
 public class MBRFSMv2 {
 	/* ======================== Constants ======================== */
@@ -28,44 +30,9 @@ public class MBRFSMv2 {
 		MOVE_TO_AMP,
 	}
 
-	private static final float SHOOTING_POWER = 0.8f;
-	private static final float AMP_SHOOTER_POWER = 0.1f;
-	private static final float AMP_OUTTAKE_POWER = -0.6f; // -0.75
-	private static final double AUTO_SHOOTING_TIME = 0.5;
-	private static final double AUTO_PRELOAD_SHOOTING_TIME = 1.7;
-
-	private static final float INTAKE_POWER = 0.3f; //0.4
-	private static final float AUTO_INTAKE_POWER = 0.37f;
-	private static final float OUTTAKE_POWER = -0.8f;
-	private static final float TELE_HOLDING_POWER = 0.0f;
-	private static final float AUTO_HOLDING_POWER = 0.05f;
-	private static final int AVERAGE_SIZE = 7;
-	private static final float CURRENT_THRESHOLD = 11.0f;
-	private static final int NOTE_FRAMES_MIN = 2;
 	private double[] currLogs;
 	private int tick = 0;
 	private int noteColorFrames = 0;
-
-	private static final double MIN_TURN_SPEED = -0.4;
-	private static final double MAX_TURN_SPEED = 0.4;
-	private static final double MIN_TURN_SPEED_AUTO = -0.85;
-	private static final double MAX_TURN_SPEED_AUTO = 0.85;
-	private static final double PID_CONSTANT_PIVOT_P = 0.00075;
-	private static final double PID_CONSTANT_PIVOT_P_AUTO = 0.001;
-
-	private static final double GROUND_ENCODER_ROTATIONS = -1200;
-	private static final double AMP_ENCODER_ROTATIONS = -525;
-	private static final double SHOOTER_ENCODER_ROTATIONS = 0;
-	private static final double INRANGE_VALUE = 20;
-
-	private static final double PROXIMIIY_THRESHOLD = 200;
-	private static final double GREEN_LOW = 0.18;
-	private static final double BLUE_LOW = 0.00;
-	private static final double RED_LOW = 0.54;
-
-	private static final double GREEN_HIGH = 0.35;
-	private static final double BLUE_HIGH = 0.1;
-	private static final double RED_HIGH = 0.8;
 
 	/* ======================== Private variables ======================== */
 	private MBRFSMState currentState;
@@ -104,7 +71,7 @@ public class MBRFSMv2 {
 		throughBore = new Encoder(0, 1);
 		throughBore.reset();
 		timer = new Timer();
-		currLogs = new double[AVERAGE_SIZE];
+		currLogs = new double[MechConstants.AVERAGE_SIZE];
 
 		//colorSensor = new ColorSensorV3(I2C.Port.kOnboard);
 
@@ -149,14 +116,14 @@ public class MBRFSMv2 {
 			return;
 		}
 
-		currLogs[tick % AVERAGE_SIZE] = intakeMotor.getSupplyCurrent().getValueAsDouble();
+		currLogs[tick % MechConstants.AVERAGE_SIZE] = intakeMotor.getSupplyCurrent().getValueAsDouble();
 		tick++;
 
 		double avgcone = 0;
-		for (int i = 0; i < AVERAGE_SIZE; i++) {
+		for (int i = 0; i < MechConstants.AVERAGE_SIZE; i++) {
 			avgcone += currLogs[i];
 		}
-		avgcone /= AVERAGE_SIZE;
+		avgcone /= MechConstants.AVERAGE_SIZE;
 
 		SmartDashboard.putNumber("avg current", avgcone);
 
@@ -251,7 +218,7 @@ public class MBRFSMv2 {
 				if (!input.isIntakeButtonPressed() && !input.isAmpButtonPressed()
 					&& (input.isShootButtonPressed()
 					|| input.isRevButtonPressed())) {
-					if (inRange(throughBore.getDistance(), SHOOTER_ENCODER_ROTATIONS)) {
+					if (inRange(throughBore.getDistance(), MechConstants.SHOOTER_ENCODER_ROTATIONS)) {
 						return MBRFSMState.SHOOTING;
 					} else {
 						return MBRFSMState.MOVE_TO_SHOOTER;
@@ -261,7 +228,7 @@ public class MBRFSMv2 {
 			case MOVE_TO_GROUND:
 				if (input.isIntakeButtonPressed() && !input.isShootButtonPressed()
 					&& !input.isRevButtonPressed() && !input.isAmpButtonPressed()) {
-					if (inRange(throughBore.getDistance(), GROUND_ENCODER_ROTATIONS)) {
+					if (inRange(throughBore.getDistance(), MechConstants.GROUND_ENCODER_ROTATIONS)) {
 						return MBRFSMState.INTAKING;
 					} else {
 						return MBRFSMState.MOVE_TO_GROUND;
@@ -294,17 +261,17 @@ public class MBRFSMv2 {
 	/* ------------------------ FSM state handlers ------------------------ */
 
 	private boolean inRange(double a, double b) {
-		return Math.abs(a - b) < INRANGE_VALUE; //EXPERIMENTAL
+		return Math.abs(a - b) < MechConstants.INRANGE_VALUE; //EXPERIMENTAL
 	}
 
 	private double pid(double currentEncoderPID, double targetEncoder) {
-		double correction = PID_CONSTANT_PIVOT_P * (targetEncoder - currentEncoderPID);
-		return Math.min(MAX_TURN_SPEED, Math.max(MIN_TURN_SPEED, correction));
+		double correction = MechConstants.PID_CONSTANT_PIVOT_P * (targetEncoder - currentEncoderPID);
+		return Math.min(MechConstants.MAX_TURN_SPEED, Math.max(MechConstants.MIN_TURN_SPEED, correction));
 	}
 
 	private double pidAuto(double currentEncoderPID, double targetEncoder) {
-		double correction = PID_CONSTANT_PIVOT_P_AUTO * (targetEncoder - currentEncoderPID);
-		return Math.min(MAX_TURN_SPEED_AUTO, Math.max(MIN_TURN_SPEED_AUTO, correction));
+		double correction = MechConstants.PID_CONSTANT_PIVOT_P_AUTO * (targetEncoder - currentEncoderPID);
+		return Math.min(MechConstants.MAX_TURN_SPEED_AUTO, Math.max(MechConstants.MIN_TURN_SPEED_AUTO, correction));
 	}
 
 	/**
@@ -313,7 +280,7 @@ public class MBRFSMv2 {
 	 */
 	public void handleMoveShooterState(TeleopInput input) {
 		led.greenLight(false);
-		pivotMotor.set(pid(throughBore.getDistance(), SHOOTER_ENCODER_ROTATIONS));
+		pivotMotor.set(pid(throughBore.getDistance(), MechConstants.SHOOTER_ENCODER_ROTATIONS));
 		shooterLeftMotor.set(0);
 		shooterRightMotor.set(0);
 		if (!input.isManualIntakeButtonPressed() && !input.isManualOuttakeButtonPressed()) {
@@ -332,7 +299,7 @@ public class MBRFSMv2 {
 	 */
 	public void handleMoveGroundState(TeleopInput input) {
 		led.greenLight(true);
-		pivotMotor.set(pid(throughBore.getDistance(), GROUND_ENCODER_ROTATIONS));
+		pivotMotor.set(pid(throughBore.getDistance(), MechConstants.GROUND_ENCODER_ROTATIONS));
 		shooterLeftMotor.set(0);
 		shooterRightMotor.set(0);
 
@@ -352,11 +319,11 @@ public class MBRFSMv2 {
 	 */
 	public void handleIntakingState(TeleopInput input) {
 		led.greenLight(true);
-		pivotMotor.set(pid(throughBore.getDistance(), GROUND_ENCODER_ROTATIONS));
+		pivotMotor.set(pid(throughBore.getDistance(), MechConstants.GROUND_ENCODER_ROTATIONS));
 		shooterLeftMotor.set(0);
 		shooterRightMotor.set(0);
 		if (!input.isManualIntakeButtonPressed() && !input.isManualOuttakeButtonPressed()) {
-			intakeMotor.set(INTAKE_POWER);
+			intakeMotor.set(MechConstants.INTAKE_POWER);
 		} else if (input.isManualIntakeButtonPressed() && !input.isManualOuttakeButtonPressed()) {
 			intakeMotor.set(0.2);
 		} else if (input.isManualOuttakeButtonPressed() && !input.isManualIntakeButtonPressed()) {
@@ -371,16 +338,16 @@ public class MBRFSMv2 {
 	 */
 	public void handleShootingState(TeleopInput input) {
 		led.greenLight(false);
-		pivotMotor.set(pid(throughBore.getDistance(), SHOOTER_ENCODER_ROTATIONS));
+		pivotMotor.set(pid(throughBore.getDistance(), MechConstants.SHOOTER_ENCODER_ROTATIONS));
 		if (input.isRevButtonPressed() && !input.isShootButtonPressed()) {
-			shooterLeftMotor.set(-SHOOTING_POWER);
-			shooterRightMotor.set(SHOOTING_POWER);
+			shooterLeftMotor.set(-MechConstants.SHOOTING_POWER);
+			shooterRightMotor.set(MechConstants.SHOOTING_POWER);
 			intakeMotor.set(0);
 		}
 		if (input.isShootButtonPressed()) {
-			shooterLeftMotor.set(-SHOOTING_POWER);
-			shooterRightMotor.set(SHOOTING_POWER);
-			intakeMotor.set(OUTTAKE_POWER);
+			shooterLeftMotor.set(-MechConstants.SHOOTING_POWER);
+			shooterRightMotor.set(MechConstants.SHOOTING_POWER);
+			intakeMotor.set(MechConstants.OUTTAKE_POWER);
 		}
 	}
 
@@ -393,7 +360,7 @@ public class MBRFSMv2 {
 		led.greenLight(false);
 		// shooterLeftMotor.set(0);
 		// shooterRightMotor.set(0);
-		pivotMotor.set(pid(throughBore.getDistance(), SHOOTER_ENCODER_ROTATIONS));
+		pivotMotor.set(pid(throughBore.getDistance(), MechConstants.SHOOTER_ENCODER_ROTATIONS));
 		// if (input.isShootAmpButtonPressed()) {
 		// 	intakeMotor.set(AMP_SHOOT_POWER);
 		// } else {
@@ -401,15 +368,15 @@ public class MBRFSMv2 {
 		// }
 
 		if (input.isAmpButtonPressed() && !input.isShootAmpButtonPressed()) {
-			shooterLeftMotor.set(-AMP_SHOOTER_POWER); // dont forget the - sign
-			shooterRightMotor.set(AMP_SHOOTER_POWER);
+			shooterLeftMotor.set(-MechConstants.AMP_SHOOTER_POWER); // dont forget the - sign
+			shooterRightMotor.set(MechConstants.AMP_SHOOTER_POWER);
 			intakeMotor.set(0);
 		}
 
 		if (input.isAmpButtonPressed() && input.isShootAmpButtonPressed()) {
-			shooterLeftMotor.set(-AMP_SHOOTER_POWER);
-			shooterRightMotor.set(AMP_SHOOTER_POWER);
-			intakeMotor.set(AMP_OUTTAKE_POWER);
+			shooterLeftMotor.set(-MechConstants.AMP_SHOOTER_POWER);
+			shooterRightMotor.set(MechConstants.AMP_SHOOTER_POWER);
+			intakeMotor.set(MechConstants.AMP_OUTTAKE_POWER);
 		}
 	}
 
@@ -419,8 +386,8 @@ public class MBRFSMv2 {
 	 * @return if the pivot is at the correct position
 	 */
 	public boolean handleAutoMoveGround() {
-		pivotMotor.set(pidAuto(throughBore.getDistance(), GROUND_ENCODER_ROTATIONS));
-		return inRange(throughBore.getDistance(), GROUND_ENCODER_ROTATIONS);
+		pivotMotor.set(pidAuto(throughBore.getDistance(), MechConstants.GROUND_ENCODER_ROTATIONS));
+		return inRange(throughBore.getDistance(), MechConstants.GROUND_ENCODER_ROTATIONS);
 	}
 
 	/**
@@ -428,9 +395,9 @@ public class MBRFSMv2 {
 	 * @return if the pivot is at the correct position
 	 */
 	public boolean handleAutoMoveShooter() {
-		intakeMotor.set(AUTO_HOLDING_POWER);
-		pivotMotor.set(pidAuto(throughBore.getDistance(), SHOOTER_ENCODER_ROTATIONS));
-		return inRange(throughBore.getDistance(), SHOOTER_ENCODER_ROTATIONS);
+		intakeMotor.set(MechConstants.AUTO_HOLDING_POWER);
+		pivotMotor.set(pidAuto(throughBore.getDistance(), MechConstants.SHOOTER_ENCODER_ROTATIONS));
+		return inRange(throughBore.getDistance(), MechConstants.SHOOTER_ENCODER_ROTATIONS);
 	}
 
 	/**
@@ -438,8 +405,8 @@ public class MBRFSMv2 {
 	 * @return if the action is completed
 	 */
 	public boolean handleAutoRev() {
-		shooterLeftMotor.set(-SHOOTING_POWER);
-		shooterRightMotor.set(SHOOTING_POWER);
+		shooterLeftMotor.set(-MechConstants.SHOOTING_POWER);
+		shooterRightMotor.set(MechConstants.SHOOTING_POWER);
 		return true;
 	}
 
@@ -451,8 +418,8 @@ public class MBRFSMv2 {
 		if (timer.get() == 0) {
 			timer.start();
 		}
-		pivotMotor.set(pid(throughBore.getDistance(), SHOOTER_ENCODER_ROTATIONS));
-		if (timer.get() > AUTO_SHOOTING_TIME) {
+		pivotMotor.set(pid(throughBore.getDistance(), MechConstants.SHOOTER_ENCODER_ROTATIONS));
+		if (timer.get() > MechConstants.AUTO_SHOOTING_TIME) {
 			intakeMotor.set(0);
 			shooterLeftMotor.set(0);
 			shooterRightMotor.set(0);
@@ -460,9 +427,9 @@ public class MBRFSMv2 {
 			timer.reset();
 			return true;
 		} else {
-			intakeMotor.set(OUTTAKE_POWER);
-			shooterLeftMotor.set(-SHOOTING_POWER);
-			shooterRightMotor.set(SHOOTING_POWER);
+			intakeMotor.set(MechConstants.OUTTAKE_POWER);
+			shooterLeftMotor.set(-MechConstants.SHOOTING_POWER);
+			shooterRightMotor.set(MechConstants.SHOOTING_POWER);
 			return false;
 		}
 	}
@@ -475,16 +442,16 @@ public class MBRFSMv2 {
 		if (timer.get() == 0) {
 			timer.start();
 		}
-		pivotMotor.set(pid(throughBore.getDistance(), SHOOTER_ENCODER_ROTATIONS));
+		pivotMotor.set(pid(throughBore.getDistance(), MechConstants.SHOOTER_ENCODER_ROTATIONS));
 		if (timer.get() < 1 + 0.5) {
 			intakeMotor.set(0);
-			shooterLeftMotor.set(-SHOOTING_POWER);
-			shooterRightMotor.set(SHOOTING_POWER);
+			shooterLeftMotor.set(-MechConstants.SHOOTING_POWER);
+			shooterRightMotor.set(MechConstants.SHOOTING_POWER);
 			return false;
-		} else if (timer.get() < AUTO_PRELOAD_SHOOTING_TIME + 0.5) {
-			intakeMotor.set(OUTTAKE_POWER);
-			shooterLeftMotor.set(-SHOOTING_POWER);
-			shooterRightMotor.set(SHOOTING_POWER);
+		} else if (timer.get() < MechConstants.AUTO_PRELOAD_SHOOTING_TIME + 0.5) {
+			intakeMotor.set(MechConstants.OUTTAKE_POWER);
+			shooterLeftMotor.set(-MechConstants.SHOOTING_POWER);
+			shooterRightMotor.set(MechConstants.SHOOTING_POWER);
 			return false;
 		} else {
 			intakeMotor.set(0);
@@ -501,7 +468,7 @@ public class MBRFSMv2 {
 	 * @return if the action is completed
 	 */
 	public boolean handleAutoIntake() {
-		intakeMotor.set(AUTO_INTAKE_POWER);
+		intakeMotor.set(MechConstants.AUTO_INTAKE_POWER);
 		shooterLeftMotor.set(0);
 		shooterRightMotor.set(0);
 		return true;

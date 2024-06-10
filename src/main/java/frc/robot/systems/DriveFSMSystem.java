@@ -11,7 +11,6 @@ import com.pathplanner.lib.util.ReplanningConfig;
 // WPILib Imports
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
-import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.kinematics.ChassisSpeeds;
 import edu.wpi.first.math.kinematics.SwerveDriveKinematics;
 import edu.wpi.first.math.kinematics.SwerveDriveOdometry;
@@ -22,23 +21,26 @@ import edu.wpi.first.wpilibj.SPI;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import edu.wpi.first.math.MathUtil;
-import edu.wpi.first.math.controller.HolonomicDriveController;
-import edu.wpi.first.math.controller.PIDController;
-import edu.wpi.first.math.controller.ProfiledPIDController;
 import edu.wpi.first.wpilibj.Timer;
 
 // Robot Imports
 import frc.robot.TeleopInput;
 import frc.robot.HardwareMap;
+import frc.robot.LED;
+import frc.robot.RaspberryPI;
+import frc.robot.SwerveConstants.AutoConstants;
 // import frc.robot.LED;
 import frc.robot.SwerveConstants.DriveConstants;
 import frc.robot.SwerveConstants.OIConstants;
+import frc.robot.SwerveConstants.VisionConstants;
 
-public class DriveFSMSystem extends SubsystemBase{
+public class DriveFSMSystem extends SubsystemBase {
 	/* ======================== Constants ======================== */
 	// FSM state definitions
 	public enum FSMState {
 		TELEOP_STATE,
+		ALIGN_TO_SPEAKER_STATE,
+		ALIGN_TO_NOTE_STATE
 	}
 
 	/* ======================== Private variables ======================== */
@@ -49,6 +51,12 @@ public class DriveFSMSystem extends SubsystemBase{
 
 	// The gyro sensor
 	private AHRS gyro = new AHRS(SPI.Port.kMXP);
+	private Timer timer = new Timer();
+
+	private RaspberryPI rpi = new RaspberryPI();
+
+	//led
+	private LED led = new LED();
 
 	// Create MAXSwerveModules
 	private final MAXSwerveModule frontLeft = new MAXSwerveModule(
@@ -82,6 +90,18 @@ public class DriveFSMSystem extends SubsystemBase{
 			rearRight.getPosition()
 		});
 
+
+	private int lockedSourceId;
+	private int lockedSpeakerId;
+	private boolean isSpeakerAligned;
+	private boolean isNoteAligned;
+	private boolean isSpeakerPositionAligned;
+
+
+	private boolean redAlliance;
+	private Double[] tagOrientationAngles;
+
+
 	/* ======================== Constructor ======================== */
 	/**
 	 * Create FSMSystem and initialize to starting state. Also perform any
@@ -92,31 +112,38 @@ public class DriveFSMSystem extends SubsystemBase{
 		gyro = new AHRS(SPI.Port.kMXP);
 
 		AutoBuilder.configureHolonomic(
-				this::getPose, // Robot pose supplier
-				this::resetPose, // Method to reset odometry (will be called if your auto has a starting pose)
-				this::getRobotRelativeSpeeds, // ChassisSpeeds supplier. MUST BE ROBOT RELATIVE
-				this::driveRobotRelative, // Method that will drive the robot given ROBOT RELATIVE ChassisSpeeds
-				new HolonomicPathFollowerConfig( // HolonomicPathFollowerConfig, this should likely live in your Constants class
-						new PIDConstants(5.0, 0.0, 0.0), // Translation PID constants
-						new PIDConstants(5.0, 0.0, 0.0), // Rotation PID constants
+				this::getPose,
+					// Robot pose supplier
+				this::resetPose,
+					// Method to reset odometry (will be called if your auto has a starting pose)
+				this::getRobotRelativeSpeeds,
+					// ChassisSpeeds supplier. MUST BE ROBOT RELATIVE
+				this::driveRobotRelative,
+					// Method that will drive the robot given ROBOT RELATIVE ChassisSpeeds
+				new HolonomicPathFollowerConfig(
+						// HolonomicPathFollowerConfig, this should live in your Constants class
+						new PIDConstants(5.0, 0.0, 0.0), // Translation PID const
+						new PIDConstants(5.0, 0.0, 0.0), // Rotation PID const
 						4.5, // Max module speed, in m/s
-						0.4, // Drive base radius in meters. Distance from robot center to furthest module.
-						new ReplanningConfig() // Default path replanning config. See the API for the options here
+						0.4, // Drive base radius (in m). Dist: robot center -> furthest module.
+						new ReplanningConfig() // Default path replanning config.
 				),
 				() -> {
-				// Boolean supplier that controls when the path will be mirrored for the red alliance
+				// Boolean supplier that controls when the path will be mirrored for red alliance
 				// This will flip the path being followed to the red side of the field.
 				// THE ORIGIN WILL REMAIN ON THE BLUE SIDE
 
 				var alliance = DriverStation.getAlliance();
 				if (alliance.isPresent()) {
-					return alliance.get() == DriverStation.Alliance.Red;
+					redAlliance = (alliance.get() == DriverStation.Alliance.Red);
 				}
-				return false;
+				redAlliance = false;
+
+				return redAlliance;
 				},
 				this // Reference to this subsystem to set requirements
 		);
-		
+
 		// Reset state machine
 		reset();
 	}
@@ -151,8 +178,34 @@ public class DriveFSMSystem extends SubsystemBase{
 
 	public void reset() {
 		currentState = FSMState.TELEOP_STATE;
+		led.turnOff();
+		resetPose(new Pose2d());
+
 		gyro.reset();
 		gyro.setAngleAdjustment(0);
+
+		if (redAlliance) {
+			tagOrientationAngles = new Double[]
+				{null, null, null, VisionConstants.SPEAKER_TAG_ANGLE_DEGREES,
+					VisionConstants.SPEAKER_TAG_ANGLE_DEGREES, null, null, null, null,
+					-VisionConstants.SOURCE_TAG_ANGLE_DEGREES,
+					-VisionConstants.SOURCE_TAG_ANGLE_DEGREES, null, null,
+					null, null, null, null};
+		} else {
+			tagOrientationAngles = new Double[]
+				{null, VisionConstants.SOURCE_TAG_ANGLE_DEGREES,
+					VisionConstants.SOURCE_TAG_ANGLE_DEGREES, null,
+					null, null, null, VisionConstants.SPEAKER_TAG_ANGLE_DEGREES,
+					VisionConstants.SPEAKER_TAG_ANGLE_DEGREES, null, null, null,
+					null, null, null, null, null};
+		}
+
+		lockedSpeakerId = -1;
+		isSpeakerAligned = false;
+		isNoteAligned = false;
+		isSpeakerPositionAligned = false;
+
+		update(null);
 	}
 
 	/**
@@ -167,6 +220,28 @@ public class DriveFSMSystem extends SubsystemBase{
 	public void resetAutonomus() {
 		gyro.reset();
 		gyro.setAngleAdjustment(0);
+
+		if (redAlliance) {
+			tagOrientationAngles = new Double[]
+				{null, null, null, VisionConstants.SPEAKER_TAG_ANGLE_DEGREES,
+					VisionConstants.SPEAKER_TAG_ANGLE_DEGREES, null, null, null, null,
+					-VisionConstants.SOURCE_TAG_ANGLE_DEGREES,
+					-VisionConstants.SOURCE_TAG_ANGLE_DEGREES, null, null, null, null, null,
+					null};
+		} else {
+			tagOrientationAngles = new Double[]
+				{null, VisionConstants.SOURCE_TAG_ANGLE_DEGREES,
+					VisionConstants.SOURCE_TAG_ANGLE_DEGREES, null,
+					null, null, null, VisionConstants.SPEAKER_TAG_ANGLE_DEGREES,
+					VisionConstants.SPEAKER_TAG_ANGLE_DEGREES, null, null, null,
+					null, null, null, null, null};
+		}
+
+		lockedSourceId = -1;
+		lockedSpeakerId = -1;
+		isSpeakerAligned = false;
+		isNoteAligned = false;
+		isSpeakerPositionAligned = false;
 	}
 
 
@@ -204,10 +279,42 @@ public class DriveFSMSystem extends SubsystemBase{
 		if (input == null) {
 			return;
 		}
+
+		if (redAlliance) {
+			if (!(rpi.getAprilTagZInv(VisionConstants.RED_SOURCE_TAG1_ID)
+				== VisionConstants.UNABLE_TO_SEE_TAG_CONSTANT
+				&& rpi.getAprilTagZInv(VisionConstants.RED_SOURCE_TAG2_ID)
+				== VisionConstants.UNABLE_TO_SEE_TAG_CONSTANT
+				&& rpi.getAprilTagZInv(VisionConstants.RED_SPEAKER_TAG_ID)
+				== VisionConstants.UNABLE_TO_SEE_TAG_CONSTANT)) {
+				//led.greenLight();
+				SmartDashboard.putBoolean("Can see tag", true);
+			} else {
+				//led.orangeLight();
+				SmartDashboard.putBoolean("Can see tag", false);
+			}
+		} else {
+			if (!(rpi.getAprilTagZInv(VisionConstants.BLUE_SOURCE_TAG1_ID)
+				== VisionConstants.UNABLE_TO_SEE_TAG_CONSTANT
+				&& rpi.getAprilTagZInv(VisionConstants.BLUE_SOURCE_TAG2_ID)
+				== VisionConstants.UNABLE_TO_SEE_TAG_CONSTANT
+				&& rpi.getAprilTagZInv(VisionConstants.BLUE_SPEAKER_TAG_ID)
+				== VisionConstants.UNABLE_TO_SEE_TAG_CONSTANT)) {
+				//led.greenLight();
+				SmartDashboard.putBoolean("Can see tag", true);
+			} else {
+				//led.orangeLight();
+				SmartDashboard.putBoolean("Can see tag", false);
+			}
+		}
+
 		SmartDashboard.putString("Drive State", getCurrentState().toString());
+		SmartDashboard.putBoolean("Is Speaker Aligned", isSpeakerAligned);
+
 		SmartDashboard.putNumber("X Pos", getPose().getX());
 		SmartDashboard.putNumber("Y Pos", getPose().getY());
 		SmartDashboard.putNumber("Heading", getPose().getRotation().getDegrees());
+
 		switch (currentState) {
 			case TELEOP_STATE:
 				drive(-MathUtil.applyDeadband((input.getControllerLeftJoystickY()
@@ -224,11 +331,56 @@ public class DriveFSMSystem extends SubsystemBase{
 					gyro.reset();
 				}
 				break;
+
+			case ALIGN_TO_SPEAKER_STATE:
+				if (lockedSpeakerId == -1) {
+					if (redAlliance) {
+						//id 4
+						if (rpi.getAprilTagZInv(VisionConstants.RED_SPEAKER_TAG_ID)
+							!= VisionConstants.UNABLE_TO_SEE_TAG_CONSTANT) {
+							lockedSpeakerId = VisionConstants.RED_SPEAKER_TAG_ID;
+						}
+					} else {
+						//id 7
+						if (rpi.getAprilTagZInv(VisionConstants.BLUE_SPEAKER_TAG_ID)
+							!= VisionConstants.UNABLE_TO_SEE_TAG_CONSTANT) {
+							lockedSpeakerId = VisionConstants.BLUE_SPEAKER_TAG_ID;
+						}
+					}
+				} else {
+					alignToSpeaker(lockedSpeakerId);
+				}
+
+				break;
+
+			case ALIGN_TO_NOTE_STATE:
+				if (rpi.getNoteYaw() != VisionConstants.UNABLE_TO_SEE_NOTE_CONSTANT) {
+					alignToNote();
+				}
+
+				break;
 			default:
 				throw new IllegalStateException("Invalid state: " + currentState.toString());
+
 		}
 		currentState = nextState(input);
 	}
+
+	/**
+	 * Updates odo + smartboard values.
+	 */
+	public void updateAutonomous() {
+		odometry.update(Rotation2d.fromDegrees(-gyro.getAngle()),
+			new SwerveModulePosition[] {
+				frontLeft.getPosition(),
+				frontRight.getPosition(),
+				rearLeft.getPosition(),
+				rearRight.getPosition()});
+		SmartDashboard.putNumber("X Pos", getPose().getX());
+		SmartDashboard.putNumber("Y Pos", getPose().getY());
+		SmartDashboard.putNumber("Heading", getPose().getRotation().getDegrees());
+	}
+
 
 	/* ======================== Private methods ======================== */
 	/**
@@ -243,7 +395,31 @@ public class DriveFSMSystem extends SubsystemBase{
 	private FSMState nextState(TeleopInput input) {
 		switch (currentState) {
 			case TELEOP_STATE:
+				if (input.isCircleButtonPressed()) {
+					return FSMState.ALIGN_TO_SPEAKER_STATE;
+				} else if (input.isCrossButtonPressed()) {
+					isNoteAligned = false;
+					return FSMState.ALIGN_TO_NOTE_STATE;
+				}
+
 				return FSMState.TELEOP_STATE;
+
+			case ALIGN_TO_SPEAKER_STATE:
+				if (input.isCircleButtonReleased()) {
+					lockedSpeakerId = -1;
+					isSpeakerAligned = false;
+					isSpeakerPositionAligned = false;
+					return FSMState.TELEOP_STATE;
+				}
+				return FSMState.ALIGN_TO_SPEAKER_STATE;
+
+			case ALIGN_TO_NOTE_STATE:
+				if (input.isCrossButtonReleased()) {
+					isNoteAligned = false;
+					return FSMState.TELEOP_STATE;
+				}
+				return FSMState.ALIGN_TO_NOTE_STATE;
+
 			default:
 				throw new IllegalStateException("Invalid state: " + currentState.toString());
 		}
@@ -259,8 +435,7 @@ public class DriveFSMSystem extends SubsystemBase{
 	 * @param rot           Angular rate of the robot.
 	 * @param fieldRelative Whether the provided x and y speeds are relative to the
 	 *                      field.
-	 * @param rateLimit     Whether to enable rate limiting for smoother control.
-	 */
+	*/
 	public void drive(double xSpeed, double ySpeed, double rot,
 		boolean fieldRelative) {
 		// Convert the commanded speeds into the correct units for the drivetrain
@@ -282,6 +457,146 @@ public class DriveFSMSystem extends SubsystemBase{
 		rearRight.setDesiredState(swerveModuleStates[(2 + 1)]);
 	}
 
+
+	/**
+	 * Drives the robot to a final odometry state.
+	 * @param pose final odometry position for the robot
+	 * @return if the robot has driven to the current position
+	 */
+	public boolean driveToPose(Pose2d pose) {
+		double x = pose.getX();
+		double y = (redAlliance ? -pose.getY() : pose.getY());
+		double angle = pose.getRotation().getDegrees();
+
+		double xDiff = x - getPose().getX();
+		double yDiff = y - getPose().getY();
+		double aDiff = angle - getPose().getRotation().getDegrees();
+
+		if (aDiff > AutoConstants.DEG_180) {
+			aDiff -= AutoConstants.DEG_360;
+		} else if (aDiff < -AutoConstants.DEG_180) {
+			aDiff += AutoConstants.DEG_360;
+		}
+
+		System.out.println(aDiff);
+
+		double xSpeed;
+		double ySpeed;
+		if (Math.abs(xDiff) > Math.abs(yDiff)) {
+			xSpeed = clamp(xDiff / AutoConstants.AUTO_DRIVE_TRANSLATIONAL_SPEED_ACCEL_CONSTANT,
+			-AutoConstants.MAX_SPEED_METERS_PER_SECOND, AutoConstants.MAX_SPEED_METERS_PER_SECOND);
+			ySpeed = xSpeed * (yDiff / xDiff);
+			if (Math.abs(xDiff) < AutoConstants.CONSTANT_SPEED_THRESHOLD && Math.abs(yDiff)
+				< AutoConstants.CONSTANT_SPEED_THRESHOLD) {
+				xSpeed = (AutoConstants.CONSTANT_SPEED_THRESHOLD * xDiff / Math.abs(xDiff))
+					/ AutoConstants.AUTO_DRIVE_TRANSLATIONAL_SPEED_ACCEL_CONSTANT;
+				ySpeed = xSpeed * (yDiff / xDiff);
+			}
+		} else {
+			ySpeed = clamp(yDiff / AutoConstants.AUTO_DRIVE_TRANSLATIONAL_SPEED_ACCEL_CONSTANT,
+			-AutoConstants.MAX_SPEED_METERS_PER_SECOND, AutoConstants.MAX_SPEED_METERS_PER_SECOND);
+			xSpeed = ySpeed * (xDiff / yDiff);
+			if (Math.abs(xDiff) < AutoConstants.CONSTANT_SPEED_THRESHOLD && Math.abs(yDiff)
+				< AutoConstants.CONSTANT_SPEED_THRESHOLD) {
+				ySpeed = (AutoConstants.CONSTANT_SPEED_THRESHOLD * yDiff / Math.abs(yDiff))
+					/ AutoConstants.AUTO_DRIVE_TRANSLATIONAL_SPEED_ACCEL_CONSTANT;
+				xSpeed = ySpeed * (xDiff / yDiff);
+			}
+		}
+
+		xSpeed = Math.abs(xDiff) > AutoConstants.AUTO_DRIVE_METERS_MARGIN_OF_ERROR
+			? xSpeed : 0;
+		ySpeed = Math.abs(yDiff) > AutoConstants.AUTO_DRIVE_METERS_MARGIN_OF_ERROR
+			? ySpeed : 0;
+		double aSpeed = Math.abs(aDiff) > AutoConstants.AUTO_DRIVE_DEGREES_MARGIN_OF_ERROR
+			? (aDiff > 0 ? Math.min(AutoConstants.MAX_ANGULAR_SPEED_RADIANS_PER_SECOND, aDiff
+			/ AutoConstants.AUTO_DRIVE_ANGULAR_SPEED_ACCEL_CONSTANT) : Math.max(
+			-AutoConstants.MAX_ANGULAR_SPEED_RADIANS_PER_SECOND, aDiff
+			/ AutoConstants.AUTO_DRIVE_ANGULAR_SPEED_ACCEL_CONSTANT)) : 0;
+
+		drive(xSpeed, ySpeed, aSpeed, true);
+		if (xSpeed == 0 && ySpeed == 0 && aSpeed == 0) {
+			return true;
+		}
+		return false;
+	}
+
+
+	/**
+	 * @param id Id of the tag we are positioning towards.
+	 * Positions the robot to the correct distance from the speaker to shoot
+	 */
+	public void alignToSpeaker(int id) {
+		double yDiff = rpi.getAprilTagX(id);
+		double xDiff = rpi.getAprilTagZ(id) - VisionConstants.SPEAKER_TARGET_DISTANCE;
+		double aDiff = rpi.getAprilTagXInv(id);
+
+		double xSpeed = clamp(xDiff
+			/ VisionConstants.SPEAKER_TRANSLATIONAL_ACCEL_CONSTANT,
+			-VisionConstants.MAX_SPEED_METERS_PER_SECOND,
+			VisionConstants.MAX_SPEED_METERS_PER_SECOND);
+		double ySpeed = clamp(yDiff
+			/ VisionConstants.SPEAKER_TRANSLATIONAL_ACCEL_CONSTANT,
+			-VisionConstants.MAX_SPEED_METERS_PER_SECOND,
+			VisionConstants.MAX_SPEED_METERS_PER_SECOND);
+		double aSpeed = -clamp(aDiff / VisionConstants.SPEAKER_ROTATIONAL_ACCEL_CONSTANT,
+			-VisionConstants.MAX_ANGULAR_SPEED_RADIANS_PER_SECOND,
+			VisionConstants.MAX_ANGULAR_SPEED_RADIANS_PER_SECOND);
+
+		double xSpeedField = Math.abs(xDiff) > VisionConstants.X_MARGIN_TO_SPEAKER
+			? (xSpeed * Math.cos(Math.toRadians(tagOrientationAngles[id])))
+			+ (ySpeed * Math.sin(Math.toRadians(tagOrientationAngles[id]))) : 0;
+		double ySpeedField = Math.abs(yDiff) > VisionConstants.Y_MARGIN_TO_SPEAKER
+			? (ySpeed * Math.cos(Math.toRadians(tagOrientationAngles[id])))
+			- (xSpeed * Math.sin(Math.toRadians(tagOrientationAngles[id]))) : 0;
+		aSpeed = Math.abs(aDiff) > VisionConstants.ROT_MARGIN_TO_SPEAKER
+			? aSpeed : 0;
+
+		drive(xSpeedField, ySpeedField, aSpeed, true);
+	}
+
+	/**
+	 * Positions the robot to align to the closest note detected.
+	 */
+	public void alignToNote() {
+		double xDiff = rpi.getNoteDistance();
+		double aDiff = rpi.getNoteYaw();
+		System.out.println(xDiff);
+
+		double ySpeed = 0;
+		double xSpeed = Math.abs(xDiff) > VisionConstants.X_MARGIN_TO_NOTE ? clamp(xDiff
+			/ VisionConstants.NOTE_TRANSLATIONAL_ACCEL_CONSTANT,
+			-VisionConstants.MAX_SPEED_METERS_PER_SECOND,
+			VisionConstants.MAX_SPEED_METERS_PER_SECOND) : 0;
+		double aSpeed = Math.abs(aDiff) > VisionConstants.ROT_MARGIN_TO_NOTE
+			? -clamp(aDiff / VisionConstants.NOTE_ROTATIONAL_ACCEL_CONSTANT,
+			-VisionConstants.MAX_ANGULAR_SPEED_RADIANS_PER_SECOND,
+			VisionConstants.MAX_ANGULAR_SPEED_RADIANS_PER_SECOND) : 0;
+
+		//System.out.println(aSpeed);
+		SmartDashboard.putNumber("yaw", rpi.getNoteYaw());
+
+		if (!isNoteAligned) {
+			drive(0, ySpeed, aSpeed, false);
+			if (aSpeed == 0) {
+				System.out.println("HERE");
+				drive(xSpeed, ySpeed, 0, false);
+				if (xSpeed == 0) {
+					isNoteAligned = true;
+				}
+			}
+		}
+		if (isNoteAligned) {
+			System.out.println("stopped note alignment");
+			drive(0, 0, 0, false);
+		}
+	}
+
+
+	/**
+	 * Driving robot relative given relative chassis speeds.
+	 * @param robotRelSpeeds relative chassis speeds
+	 */
 	public void driveRobotRelative(ChassisSpeeds robotRelSpeeds) {
 		odometry.update(Rotation2d.fromDegrees(getHeading()),
 			new SwerveModulePosition[] {
@@ -293,7 +608,8 @@ public class DriveFSMSystem extends SubsystemBase{
 		SmartDashboard.putNumber("Y Pos", getPose().getY());
 		SmartDashboard.putNumber("Heading", getPose().getRotation().getDegrees());
 
-		var swerveModuleStates = DriveConstants.DRIVE_KINEMATICS.toSwerveModuleStates(robotRelSpeeds);
+		var swerveModuleStates =
+			DriveConstants.DRIVE_KINEMATICS.toSwerveModuleStates(robotRelSpeeds);
 
 		frontLeft.setDesiredState(swerveModuleStates[0]);
 		frontRight.setDesiredState(swerveModuleStates[1]);
@@ -301,8 +617,16 @@ public class DriveFSMSystem extends SubsystemBase{
 		rearRight.setDesiredState(swerveModuleStates[(2 + 1)]);
 	}
 
+	/**
+	 * get the relative robot speeds.
+	 * @return chassis speeds of swerve modules
+	 */
 	public ChassisSpeeds getRobotRelativeSpeeds() {
-		SwerveModuleState[] swerveStates = new SwerveModuleState[]{frontLeft.getState(), frontRight.getState(), rearLeft.getState(), rearRight.getState()};
+		SwerveModuleState[] swerveStates =
+			new SwerveModuleState[]{
+				frontLeft.getState(), frontRight.getState(),
+				rearLeft.getState(), rearRight.getState()};
+
 		return DriveConstants.DRIVE_KINEMATICS.toChassisSpeeds(swerveStates);
 	}
 	/**

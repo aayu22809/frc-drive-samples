@@ -97,6 +97,20 @@ public class TeleopInput {
 		return driverController.getTriangleButtonReleased();
 	}
 	/**
+	 * Get the value of the Cross button.
+	 * @return True if button is pressed
+	 */
+	public boolean isCrossButtonPressed() {
+		return driverController.getCrossButtonPressed();
+	}
+	/**
+	 * Get the value of the Cross button.
+	 * @return True if button is released
+	 */
+	public boolean isCrossButtonReleased() {
+		return driverController.getCrossButtonReleased();
+	}
+	/**
 	 * Get the value of the left trigger.
 	 * @return value of the left trigger.
 	 */
