@@ -1,4 +1,4 @@
-package frc.robot.commands.mech;
+package frc.robot.commands.align;
 
 import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
@@ -13,40 +13,52 @@ import com.ctre.phoenix6.signals.NeutralModeValue;
 
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.wpilibj.Encoder;
+import edu.wpi.first.wpilibj.Timer;
 import frc.robot.systems.DriveFSMSystem;
 
 public class AprilTagAlign extends Command {
 	private int atID;
+	private DriveFSMSystem driveSubsystem;
+	private Timer timer;
+	private double timeAlign;
 
 	/**
 	 * Makes a command that aligns robot to pose using DriveFSMSystem.
 	 * @param id id of AT to align with
+	 * @param drive_subsystem Drive Subsystem with alignment functions
+	 * @param timeAlign the amount of time that the robot aligns with the tag
 	 */
-	public AprilTagAlign(int id) {
+	public AprilTagAlign(int id, DriveFSMSystem driveSubsystem, double timeAlign) {
 		atID = id;
+		this.driveSubsystem = driveSubsystem;
+		this.timeAlign = timeAlign;
+		timer = new Timer();
 	}
 
 	// Called when the command is initially scheduled.
 	@Override
 	public void initialize() {
+		if (timer.get() == 0) {
+			timer.start();
+		}
 	}
 
 	// Called every time the scheduler runs while the command is scheduled.
 	@Override
 	public void execute() {
-		intakeMotor.set(MechConstants.INTAKE_POWER);
+		driveSubsystem.alignToSpeaker(atID);
 	}
 
 	// Called once the command ends or is interrupted.
 	@Override
 	public void end(boolean interrupted) {
-		intakeMotor.set(0);
+		driveSubsystem.autoResetAlignment();
 	}
 
 	// Returns true when the command should end.
 	@Override
 	public boolean isFinished() {
-		return false;
+		return timer.get() > timeAlign || driveSubsystem.speakerAligned();
 	}
 
 	private double pidAuto(double currentEncoderPID, double targetEncoder) {

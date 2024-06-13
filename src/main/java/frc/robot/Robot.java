@@ -3,8 +3,10 @@
 // the WPILib BSD license file in the root directory of this project.
 package frc.robot;
 
+import java.util.Arrays;
 import java.util.List;
 
+import com.ctre.phoenix6.mechanisms.MechanismState;
 import com.pathplanner.lib.auto.AutoBuilder;
 import com.pathplanner.lib.auto.NamedCommands;
 import com.pathplanner.lib.commands.PathPlannerAuto;
@@ -12,6 +14,7 @@ import com.revrobotics.REVPhysicsSim;
 
 import edu.wpi.first.cameraserver.CameraServer;
 import edu.wpi.first.cscore.VideoSource.ConnectionStrategy;
+import edu.wpi.first.math.Pair;
 import edu.wpi.first.math.controller.PIDController;
 import edu.wpi.first.math.controller.ProfiledPIDController;
 import edu.wpi.first.math.geometry.Pose2d;
@@ -45,7 +48,13 @@ import frc.robot.systems.DriveFSMSystem;
 import frc.robot.systems.MBRFSMv2;
 
 //Commands
-import frc.robot.commands.
+import frc.robot.commands.mech.IntakeNoteUntimed;
+import frc.robot.commands.mech.PivotGroundToShooter;
+import frc.robot.commands.mech.PivotShooterToGround;
+import frc.robot.commands.mech.RevShooterUntimed;
+import frc.robot.commands.mech.OuttakeNote;
+import frc.robot.commands.align.AprilTagAlign;
+import frc.robot.commands.align.NoteAlign;
 
 /**
  * The VM is configured to automatically run this class, and to call the functions corresponding to
@@ -56,17 +65,21 @@ public class Robot extends TimedRobot {
 	// Systems
 	private DriveFSMSystem driveFSMSystem;
 	private MBRFSMv2 mbrfsMv2;
-	SendableChooser<Command> autoChooser;
-	Command autonomousCommand;
-	private final Field2d m_field = new Field2d();
+	private SendableChooser<Command> autoChooser;
+	private Command autonomousCommand;
+	private final Field2d mField = new Field2d();
 
 	private UsbCamera driverCam;
-	private UsbCamera aTagCam;
-	private UsbCamera noteCam;
+	private UsbCamera chainCam;
 	private VideoSink videoSink;
 	private MjpegServer driverStream;
-	private MjpegServer aTagStream;
-	private MjpegServer noteStream;
+	private MjpegServer chainStream;
+
+	private final int streamWidth = 320;
+	private final int streamHeight = 240;
+
+	private final int redSpeakerTagID = 4;
+	private final int blueSpeakerTagID = 7;
 
 
 	/**
@@ -77,21 +90,39 @@ public class Robot extends TimedRobot {
 	public void robotInit() {
 		System.out.println("robotInit");
 		input = new TeleopInput();
-		driveFSMSystem = new DriveFSMSystem();
-		mbrfsMv2 = new MBRFSMv2();
+
 		autoChooser = AutoBuilder.buildAutoChooser();
 		SmartDashboard.putData("Auto Chooser", autoChooser);
-		SmartDashboard.putData("Field", m_field);
-
-		/*NamedCommands.registerCommand("autoBalance", swerve.autoBalanceCommand());
-		NamedCommands.registerCommand("exampleCommand", exampleSubsystem.exampleCommand());
-		NamedCommands.registerCommand("someOtherCommand", new SomeOtherCommand());*/
+		SmartDashboard.putData("Field", mField);
 
 		driverCam = CameraServer.startAutomaticCapture(0);
-		driverCam.setResolution(640, 480);
+		chainCam = CameraServer.startAutomaticCapture(1);
+
 		driverCam.setConnectionStrategy(ConnectionStrategy.kKeepOpen);
+		chainCam.setConnectionStrategy(ConnectionStrategy.kKeepOpen);
+
+		driverCam.setResolution(streamWidth, streamHeight);
+		chainCam.setResolution(streamWidth, streamHeight);
+
+		driverCam.setConnectionStrategy(ConnectionStrategy.kKeepOpen);
+		chainCam.setConnectionStrategy(ConnectionStrategy.kKeepOpen);
 
 		// Instantiate all systems here
+		driveFSMSystem = new DriveFSMSystem();
+		mbrfsMv2 = new MBRFSMv2();
+
+		//Label all named commands here
+		NamedCommands.registerCommand("S_UIN", new IntakeNoteUntimed());
+		NamedCommands.registerCommand("S_PGS", new PivotGroundToShooter());
+		NamedCommands.registerCommand("S_PSG", new PivotShooterToGround());
+		NamedCommands.registerCommand("S_URS", new RevShooterUntimed());
+		NamedCommands.registerCommand("S_TON", new OuttakeNote(MechConstants.AUTO_SHOOTING_TIME));
+		NamedCommands.registerCommand("S_ART", new AprilTagAlign(redSpeakerTagID,
+			driveFSMSystem, MechConstants.TAG_ALIGNMENT_TIME));
+		NamedCommands.registerCommand("S_ABT", new AprilTagAlign(blueSpeakerTagID,
+			driveFSMSystem, MechConstants.TAG_ALIGNMENT_TIME));
+		NamedCommands.registerCommand("S_AXN", new NoteAlign(driveFSMSystem,
+			MechConstants.NOTE_ALIGNMENT_TIME));
 	}
 
 

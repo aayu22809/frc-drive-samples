@@ -91,7 +91,6 @@ public class DriveFSMSystem extends SubsystemBase {
 		});
 
 
-	private int lockedSourceId;
 	private int lockedSpeakerId;
 	private boolean isSpeakerAligned;
 	private boolean isNoteAligned;
@@ -237,7 +236,6 @@ public class DriveFSMSystem extends SubsystemBase {
 					null, null, null, null, null};
 		}
 
-		lockedSourceId = -1;
 		lockedSpeakerId = -1;
 		isSpeakerAligned = false;
 		isNoteAligned = false;
@@ -527,34 +525,43 @@ public class DriveFSMSystem extends SubsystemBase {
 	 * Positions the robot to the correct distance from the speaker to shoot
 	 */
 	public void alignToSpeaker(int id) {
-		double yDiff = rpi.getAprilTagX(id);
-		double xDiff = rpi.getAprilTagZ(id) - VisionConstants.SPEAKER_TARGET_DISTANCE;
-		double aDiff = rpi.getAprilTagXInv(id);
+		if (rpi.getAprilTagX(id) != VisionConstants.UNABLE_TO_SEE_TAG_CONSTANT) {
+			resetPose(new Pose2d(rpi.getAprilTagZ(id), rpi.getAprilTagX(id),
+				new Rotation2d(rpi.getAprilTagXInv(id))));
+		}
+		double yDiff = odometry.getPoseMeters().getY();
+		double xDiff = odometry.getPoseMeters().getX() - VisionConstants.SPEAKER_TARGET_DISTANCE;
+		double aDiff = odometry.getPoseMeters().getRotation().getRadians();
 
-		double xSpeed = clamp(xDiff
-			/ VisionConstants.SPEAKER_TRANSLATIONAL_ACCEL_CONSTANT,
+		double xSpeed = Math.abs(xDiff) > VisionConstants.X_MARGIN_TO_SPEAKER
+			? clamp(xDiff / VisionConstants.SPEAKER_TRANSLATIONAL_ACCEL_CONSTANT,
 			-VisionConstants.MAX_SPEED_METERS_PER_SECOND,
-			VisionConstants.MAX_SPEED_METERS_PER_SECOND);
-		double ySpeed = clamp(yDiff
-			/ VisionConstants.SPEAKER_TRANSLATIONAL_ACCEL_CONSTANT,
+			VisionConstants.MAX_SPEED_METERS_PER_SECOND) : 0;
+		double ySpeed = Math.abs(yDiff) > VisionConstants.Y_MARGIN_TO_SPEAKER
+			? clamp(yDiff / VisionConstants.SPEAKER_TRANSLATIONAL_ACCEL_CONSTANT,
 			-VisionConstants.MAX_SPEED_METERS_PER_SECOND,
-			VisionConstants.MAX_SPEED_METERS_PER_SECOND);
-		double aSpeed = -clamp(aDiff / VisionConstants.SPEAKER_ROTATIONAL_ACCEL_CONSTANT,
+			VisionConstants.MAX_SPEED_METERS_PER_SECOND) : 0;
+		double aSpeed = Math.abs(aDiff) > VisionConstants.ROT_MARGIN_TO_SPEAKER
+			? -clamp(aDiff / VisionConstants.SPEAKER_ROTATIONAL_ACCEL_CONSTANT,
 			-VisionConstants.MAX_ANGULAR_SPEED_RADIANS_PER_SECOND,
-			VisionConstants.MAX_ANGULAR_SPEED_RADIANS_PER_SECOND);
+			VisionConstants.MAX_ANGULAR_SPEED_RADIANS_PER_SECOND) : 0;
 
-		double xSpeedField = Math.abs(xDiff) > VisionConstants.X_MARGIN_TO_SPEAKER
-			? (xSpeed * Math.cos(Math.toRadians(tagOrientationAngles[id])))
-			+ (ySpeed * Math.sin(Math.toRadians(tagOrientationAngles[id]))) : 0;
-		double ySpeedField = Math.abs(yDiff) > VisionConstants.Y_MARGIN_TO_SPEAKER
-			? (ySpeed * Math.cos(Math.toRadians(tagOrientationAngles[id])))
-			- (xSpeed * Math.sin(Math.toRadians(tagOrientationAngles[id]))) : 0;
-		aSpeed = Math.abs(aDiff) > VisionConstants.ROT_MARGIN_TO_SPEAKER
-			? aSpeed : 0;
-
-		drive(xSpeedField, ySpeedField, aSpeed, true);
+		double xSpeedField = (xSpeed * Math.cos(Math.toRadians(tagOrientationAngles[id])))
+			+ (ySpeed * Math.sin(Math.toRadians(tagOrientationAngles[id])));
+		double ySpeedField = (ySpeed * Math.cos(Math.toRadians(tagOrientationAngles[id])))
+			- (xSpeed * Math.sin(Math.toRadians(tagOrientationAngles[id])));
+		if (xSpeedField == 0 && ySpeedField == 0) {
+			isSpeakerPositionAligned = true;
+		}
+		if (!isSpeakerPositionAligned) {
+			drive(xSpeedField, ySpeedField, aSpeed, true);
+		} else {
+			drive(0, 0, aSpeed, true);
+			if (aSpeed == 0) {
+				isSpeakerAligned = true;
+			}
+		}
 	}
-
 	/**
 	 * Positions the robot to align to the closest note detected.
 	 */
@@ -590,6 +597,32 @@ public class DriveFSMSystem extends SubsystemBase {
 			System.out.println("stopped note alignment");
 			drive(0, 0, 0, false);
 		}
+	}
+
+	/**
+	 * Returns whether the note is aligned at the time of the function call.
+	 * @return isNoteAligned
+	 */
+	public boolean noteAligned() {
+		return isNoteAligned;
+	}
+
+	/**
+	 * Returns whether the speaker is aligned at the time of the function call.
+	 * @return isSpeakerAligned
+	 */
+	public boolean speakerAligned() {
+		return isSpeakerAligned;
+	}
+
+	/**
+	 * Resets alignment constants during auto paths upon alignment command ending.
+	 */
+	public void autoResetAlignment() {
+		lockedSpeakerId = -1;
+		isSpeakerAligned = false;
+		isNoteAligned = false;
+		isSpeakerPositionAligned = false;
 	}
 
 
