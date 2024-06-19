@@ -5,6 +5,7 @@ import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import frc.robot.HardwareMap;
 import frc.robot.MechConstants;
+import frc.robot.systems.MBRFSMv2;
 
 // Third party Hardware Imports
 import com.revrobotics.CANSparkMax;
@@ -17,21 +18,19 @@ public class RevShooterTimed extends Command {
 	private Encoder throughBore;
 	private Timer timer;
 	private double timeShooting;
+	private MBRFSMv2 mbrFSM;
 
 	/**
 	 * Makes a command that shoots the note out.
 	 * @param timeShooting how much time the shooter is expected to rev for
 	 */
-	public RevShooterTimed(double timeShooting) {
+	public RevShooterTimed(MBRFSMv2 mbrFSM) {
 		// Use addRequirements() here to declare subsystem dependencies.
-		shooterLeftMotor = new CANSparkMax(HardwareMap.CAN_ID_SPARK_LSHOOTER_MOTOR,
-										CANSparkMax.MotorType.kBrushless);
 
-		shooterRightMotor = new CANSparkMax(HardwareMap.CAN_ID_SPARK_RSHOOTER_MOTOR,
-										CANSparkMax.MotorType.kBrushless);
+		//throughBore = new Encoder(0, 1);
+		//throughBore.reset();
 
-		throughBore = new Encoder(0, 1);
-		throughBore.reset();
+		this.mbrFSM = mbrFSM;
 
 		timer = new Timer();
 		this.timeShooting = timeShooting;
@@ -51,15 +50,15 @@ public class RevShooterTimed extends Command {
 	// Called every time the scheduler runs while the command is scheduled.
 	@Override
 	public void execute() {
-		shooterLeftMotor.set(-MechConstants.SHOOTING_POWER);
-		shooterRightMotor.set(MechConstants.SHOOTING_POWER);
+		mbrFSM.setShooterLeftMotorPower(MechConstants.SHOOTING_POWER);
+		mbrFSM.setShooterRightMotorPower(MechConstants.SHOOTING_POWER);
 	}
 
 	// Called once the command ends or is interrupted.
 	@Override
 	public void end(boolean interrupted) {
-		shooterLeftMotor.set(0);
-		shooterRightMotor.set(0);
+		mbrFSM.setShooterLeftMotorPower(0);
+		mbrFSM.setShooterRightMotorPower(0);
 		timer.stop();
 		timer.reset();
 	}

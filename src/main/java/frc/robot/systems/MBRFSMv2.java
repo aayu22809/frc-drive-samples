@@ -40,7 +40,7 @@ public class MBRFSMv2 {
 	private CANSparkMax shooterRightMotor;
 	private TalonFX intakeMotor;
 	private TalonFX pivotMotor;
-	private LED led = new LED();
+	//private LED led = new LED();
 
 	// Hardware devices should be owned by one and only one system. They must
 	// be private to their owner system and may not be used elsewhere.
@@ -56,7 +56,7 @@ public class MBRFSMv2 {
 	 * one-time initialization or configuration of hardware required. Note
 	 * the constructor is called only once when the robot boots.
 	 */
-	public MBRFSMv2() {
+	public MBRFSMv2(Encoder throughBore) {
 		shooterLeftMotor = new CANSparkMax(HardwareMap.CAN_ID_SPARK_LSHOOTER_MOTOR,
 										CANSparkMax.MotorType.kBrushless);
 
@@ -68,7 +68,7 @@ public class MBRFSMv2 {
 		pivotMotor = new TalonFX(HardwareMap.DEVICE_ID_ARM_MOTOR);
 		pivotMotor.setNeutralMode(NeutralModeValue.Brake);
 
-		throughBore = new Encoder(0, 1);
+		this.throughBore = throughBore;
 		throughBore.reset();
 		timer = new Timer();
 		currLogs = new double[MechConstants.AVERAGE_SIZE];
@@ -96,7 +96,7 @@ public class MBRFSMv2 {
 	 * Ex. if the robot is enabled, disabled, then reenabled.
 	 */
 	public void reset() {
-		led.greenLight(false);
+		//ledled.greenLight(false);
 		currentState = MBRFSMState.MOVE_TO_SHOOTER;
 
 		timer.stop();
@@ -274,12 +274,31 @@ public class MBRFSMv2 {
 		return Math.min(MechConstants.MAX_TURN_SPEED_AUTO, Math.max(MechConstants.MIN_TURN_SPEED_AUTO, correction));
 	}
 
+	public void setIntakeMotorPower(float power) {
+		intakeMotor.set(power);
+	}
+
+	public void pidPivotAuto(double encoderFinal) {
+		pivotMotor.set(pidAuto(throughBore.getDistance(), encoderFinal));
+	}
+
+	public boolean pidPivotCompleted(double encoderFinal) {
+		return inRange(throughBore.getDistance(), encoderFinal);
+	}
+
+	public void setShooterLeftMotorPower(double power) {
+		shooterLeftMotor.set(-power);
+	}
+
+	public void setShooterRightMotorPower(double power) {
+		shooterRightMotor.set(power);
+	}
 	/**
 	 * Handles the moving to shooter state of the MBR Mech.
 	 * @param input
 	 */
 	public void handleMoveShooterState(TeleopInput input) {
-		led.greenLight(false);
+		//led.greenLight(false);
 		pivotMotor.set(pid(throughBore.getDistance(), MechConstants.SHOOTER_ENCODER_ROTATIONS));
 		shooterLeftMotor.set(0);
 		shooterRightMotor.set(0);
@@ -298,7 +317,7 @@ public class MBRFSMv2 {
 	 *        the robot is in autonomous mode.
 	 */
 	public void handleMoveGroundState(TeleopInput input) {
-		led.greenLight(true);
+	//	led.greenLight(true);
 		pivotMotor.set(pid(throughBore.getDistance(), MechConstants.GROUND_ENCODER_ROTATIONS));
 		shooterLeftMotor.set(0);
 		shooterRightMotor.set(0);
@@ -318,7 +337,7 @@ public class MBRFSMv2 {
 	 *        the robot is in autonomous mode.
 	 */
 	public void handleIntakingState(TeleopInput input) {
-		led.greenLight(true);
+		//led.greenLight(true);
 		pivotMotor.set(pid(throughBore.getDistance(), MechConstants.GROUND_ENCODER_ROTATIONS));
 		shooterLeftMotor.set(0);
 		shooterRightMotor.set(0);
@@ -337,7 +356,7 @@ public class MBRFSMv2 {
 	 *        the robot is in autonomous mode.
 	 */
 	public void handleShootingState(TeleopInput input) {
-		led.greenLight(false);
+		//led.greenLight(false);
 		pivotMotor.set(pid(throughBore.getDistance(), MechConstants.SHOOTER_ENCODER_ROTATIONS));
 		if (input.isRevButtonPressed() && !input.isShootButtonPressed()) {
 			shooterLeftMotor.set(-MechConstants.SHOOTING_POWER);
@@ -357,7 +376,7 @@ public class MBRFSMv2 {
 	 *        the robot is in autonomous mode.
 	 */
 	public void handleMoveAmpState(TeleopInput input) {
-		led.greenLight(false);
+		//led.greenLight(false);
 		// shooterLeftMotor.set(0);
 		// shooterRightMotor.set(0);
 		pivotMotor.set(pid(throughBore.getDistance(), MechConstants.SHOOTER_ENCODER_ROTATIONS));

@@ -19,6 +19,7 @@ import edu.wpi.first.wpilibj.Encoder;
 // Robot Imports
 import frc.robot.HardwareMap;
 import frc.robot.MechConstants;
+import frc.robot.systems.MBRFSMv2;
 
 
 public class PivotShooterToGround extends Command {
@@ -26,20 +27,14 @@ public class PivotShooterToGround extends Command {
 	private TalonFX pivotMotor;
 	private Encoder throughBore;
 	private Timer timer;
+	private MBRFSMv2 mbrFSM;
 
 	/**
 	 * IntakeGroundToShooter command.
 	 */
-	public PivotShooterToGround() {
+	public PivotShooterToGround(MBRFSMv2 mbrFSM) {
 		// Use addRequirements() here to declare subsystem dependencies.
-		intakeMotor = new TalonFX(HardwareMap.DEVICE_ID_INTAKE_MOTOR);
-		intakeMotor.setNeutralMode(NeutralModeValue.Brake);
-
-		pivotMotor = new TalonFX(HardwareMap.DEVICE_ID_ARM_MOTOR);
-		pivotMotor.setNeutralMode(NeutralModeValue.Brake);
-
-		throughBore = new Encoder(0, 1);
-		throughBore.reset();
+		this.mbrFSM = mbrFSM;
 		timer = new Timer();
 
 		//addRequirements(m_intakeWheels);
@@ -48,13 +43,13 @@ public class PivotShooterToGround extends Command {
 	// Called when the command is initially scheduled.
 	@Override
 	public void initialize() {
-		intakeMotor.set(MechConstants.AUTO_HOLDING_POWER);
+		mbrFSM.setIntakeMotorPower(MechConstants.AUTO_HOLDING_POWER);
 	}
 
 	// Called every time the scheduler runs while the command is scheduled.
 	@Override
 	public void execute() {
-		pivotMotor.set(pidAuto(throughBore.getDistance(), MechConstants.GROUND_ENCODER_ROTATIONS));
+		mbrFSM.pidPivotAuto(MechConstants.GROUND_ENCODER_ROTATIONS);
 	}
 
 	// Called once the command ends or is interrupted.
@@ -66,7 +61,7 @@ public class PivotShooterToGround extends Command {
 	// Returns true when the command should end.
 	@Override
 	public boolean isFinished() {
-		return inRange(throughBore.getDistance(), MechConstants.GROUND_ENCODER_ROTATIONS);
+		return mbrFSM.pidPivotCompleted(MechConstants.GROUND_ENCODER_ROTATIONS);
 	}
 
 	private double pidAuto(double currentEncoderPID, double targetEncoder) {

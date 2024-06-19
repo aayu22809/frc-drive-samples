@@ -5,6 +5,7 @@ import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import frc.robot.HardwareMap;
 import frc.robot.MechConstants;
+import frc.robot.systems.MBRFSMv2;
 
 // Third party Hardware Imports
 import com.revrobotics.CANSparkMax;
@@ -17,18 +18,18 @@ public class IntakeNoteTimed extends Command {
 	private TalonFX intakeMotor;
 	private Timer timer;
 	private float timeIntaking;
+	private MBRFSMv2 mbrFSM;
 
 	/**
 	 * Makes a command that shoots the note out.
 	 * @param timeIntaking time the intake outtakes the note
 	 */
-	public IntakeNoteTimed(float timeIntaking) {
+	public IntakeNoteTimed(float timeIntaking, MBRFSMv2 mbrFSM) {
 		// Use addRequirements() here to declare subsystem dependencies.
-		intakeMotor = new TalonFX(HardwareMap.DEVICE_ID_INTAKE_MOTOR);
-		intakeMotor.setNeutralMode(NeutralModeValue.Brake);
 
 		timer = new Timer();
 		this.timeIntaking = timeIntaking;
+		this.mbrFSM = mbrFSM;
 
 		//addRequirements(...);
 
@@ -45,13 +46,13 @@ public class IntakeNoteTimed extends Command {
 	// Called every time the scheduler runs while the command is scheduled.
 	@Override
 	public void execute() {
-		intakeMotor.set(MechConstants.INTAKE_POWER);
+		mbrFSM.setIntakeMotorPower(MechConstants.INTAKE_POWER);
 	}
 
 	// Called once the command ends or is interrupted.
 	@Override
 	public void end(boolean interrupted) {
-		intakeMotor.set(0);
+		mbrFSM.setIntakeMotorPower(0);
 		timer.stop();
 		timer.reset();
 	}

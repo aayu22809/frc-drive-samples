@@ -27,7 +27,7 @@ import edu.wpi.first.cscore.UsbCamera;
 import edu.wpi.first.cscore.VideoMode;
 import edu.wpi.first.cscore.VideoSink;
 import edu.wpi.first.util.PixelFormat;
-
+import edu.wpi.first.wpilibj.Encoder;
 // WPILib Imports
 import edu.wpi.first.wpilibj.TimedRobot;
 import edu.wpi.first.wpilibj.shuffleboard.Shuffleboard;
@@ -80,7 +80,7 @@ public class Robot extends TimedRobot {
 
 	private final int redSpeakerTagID = 4;
 	private final int blueSpeakerTagID = 7;
-
+	private Encoder throughBore;
 
 	/**
 	 * This function is run when the robot is first started up and should be used for any
@@ -91,38 +91,34 @@ public class Robot extends TimedRobot {
 		System.out.println("robotInit");
 		input = new TeleopInput();
 
+		throughBore = new Encoder(0, 1);
+		throughBore.reset();
+
+		// Instantiate all systems here
+		driveFSMSystem = new DriveFSMSystem();
+		mbrfsMv2 = new MBRFSMv2(throughBore);
+
 		autoChooser = AutoBuilder.buildAutoChooser();
 		SmartDashboard.putData("Auto Chooser", autoChooser);
 		SmartDashboard.putData("Field", mField);
 
-		driverCam = CameraServer.startAutomaticCapture(0);
-		chainCam = CameraServer.startAutomaticCapture(1);
-
-		driverCam.setConnectionStrategy(ConnectionStrategy.kKeepOpen);
-		chainCam.setConnectionStrategy(ConnectionStrategy.kKeepOpen);
-
-		driverCam.setResolution(streamWidth, streamHeight);
-		chainCam.setResolution(streamWidth, streamHeight);
-
-		driverCam.setConnectionStrategy(ConnectionStrategy.kKeepOpen);
-		chainCam.setConnectionStrategy(ConnectionStrategy.kKeepOpen);
-
-		// Instantiate all systems here
-		driveFSMSystem = new DriveFSMSystem();
-		mbrfsMv2 = new MBRFSMv2();
+		//driverCam = CameraServer.startAutomaticCapture(0);
+		//driverCam.setConnectionStrategy(ConnectionStrategy.kKeepOpen);
+		//driverCam.setResolution(streamWidth, streamHeight);
 
 		//Label all named commands here
-		NamedCommands.registerCommand("S_UIN", new IntakeNoteUntimed());
-		NamedCommands.registerCommand("S_PGS", new PivotGroundToShooter());
-		NamedCommands.registerCommand("S_PSG", new PivotShooterToGround());
-		NamedCommands.registerCommand("S_URS", new RevShooterUntimed());
-		NamedCommands.registerCommand("S_TON", new OuttakeNote(MechConstants.AUTO_SHOOTING_TIME));
+		NamedCommands.registerCommand("S_UIN", new IntakeNoteUntimed(mbrfsMv2));
+		NamedCommands.registerCommand("S_PGS", new PivotGroundToShooter(mbrfsMv2));
+		NamedCommands.registerCommand("S_PSG", new PivotShooterToGround(mbrfsMv2));
+		NamedCommands.registerCommand("S_URS", new RevShooterUntimed(mbrfsMv2));
+		NamedCommands.registerCommand("S_TON", new OuttakeNote(MechConstants.AUTO_SHOOTING_TIME,
+			mbrfsMv2));
 		NamedCommands.registerCommand("S_ART", new AprilTagAlign(redSpeakerTagID,
-			driveFSMSystem, MechConstants.TAG_ALIGNMENT_TIME));
+			driveFSMSystem, 0.5));
 		NamedCommands.registerCommand("S_ABT", new AprilTagAlign(blueSpeakerTagID,
-			driveFSMSystem, MechConstants.TAG_ALIGNMENT_TIME));
+			driveFSMSystem, 0.5));
 		NamedCommands.registerCommand("S_AXN", new NoteAlign(driveFSMSystem,
-			MechConstants.NOTE_ALIGNMENT_TIME));
+			0.5));
 	}
 
 
@@ -144,7 +140,7 @@ public class Robot extends TimedRobot {
 	public void autonomousPeriodic() {
 		CommandScheduler.getInstance().run();
 		// driveFSMSystem.updateAutonomous();
-		m_field.setRobotPose(driveFSMSystem.getPose());
+		mField.setRobotPose(driveFSMSystem.getPose());
 	}
 
 	@Override

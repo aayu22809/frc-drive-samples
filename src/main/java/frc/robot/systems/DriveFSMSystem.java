@@ -56,7 +56,7 @@ public class DriveFSMSystem extends SubsystemBase {
 	private RaspberryPI rpi = new RaspberryPI();
 
 	//led
-	private LED led = new LED();
+	//private LED led = new LED();
 
 	// Create MAXSwerveModules
 	private final MAXSwerveModule frontLeft = new MAXSwerveModule(
@@ -177,7 +177,7 @@ public class DriveFSMSystem extends SubsystemBase {
 
 	public void reset() {
 		currentState = FSMState.TELEOP_STATE;
-		led.turnOff();
+		//led.turnOff();
 		resetPose(new Pose2d());
 
 		gyro.reset();
