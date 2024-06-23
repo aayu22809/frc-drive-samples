@@ -91,22 +91,10 @@ public class Robot extends TimedRobot {
 		System.out.println("robotInit");
 		input = new TeleopInput();
 
-		throughBore = new Encoder(0, 1);
-		throughBore.reset();
-
 		// Instantiate all systems here
 		driveFSMSystem = new DriveFSMSystem();
-		mbrfsMv2 = new MBRFSMv2(throughBore);
+		mbrfsMv2 = new MBRFSMv2();
 
-		autoChooser = AutoBuilder.buildAutoChooser();
-		SmartDashboard.putData("Auto Chooser", autoChooser);
-		SmartDashboard.putData("Field", mField);
-
-		//driverCam = CameraServer.startAutomaticCapture(0);
-		//driverCam.setConnectionStrategy(ConnectionStrategy.kKeepOpen);
-		//driverCam.setResolution(streamWidth, streamHeight);
-
-		//Label all named commands here
 		NamedCommands.registerCommand("S_UIN", new IntakeNoteUntimed(mbrfsMv2));
 		NamedCommands.registerCommand("S_PGS", new PivotGroundToShooter(mbrfsMv2));
 		NamedCommands.registerCommand("S_PSG", new PivotShooterToGround(mbrfsMv2));
@@ -119,6 +107,17 @@ public class Robot extends TimedRobot {
 			driveFSMSystem, 0.5));
 		NamedCommands.registerCommand("S_AXN", new NoteAlign(driveFSMSystem,
 			0.5));
+
+		autoChooser = AutoBuilder.buildAutoChooser();
+
+		SmartDashboard.putData("Auto Chooser", autoChooser);
+		SmartDashboard.putData("Field", mField);
+
+		//driverCam = CameraServer.startAutomaticCapture(0);
+		//driverCam.setConnectionStrategy(ConnectionStrategy.kKeepOpen);
+		//driverCam.setResolution(streamWidth, streamHeight);
+
+		//Label all named commands here
 	}
 
 

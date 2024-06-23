@@ -56,7 +56,7 @@ public class MBRFSMv2 {
 	 * one-time initialization or configuration of hardware required. Note
 	 * the constructor is called only once when the robot boots.
 	 */
-	public MBRFSMv2(Encoder throughBore) {
+	public MBRFSMv2() {
 		shooterLeftMotor = new CANSparkMax(HardwareMap.CAN_ID_SPARK_LSHOOTER_MOTOR,
 										CANSparkMax.MotorType.kBrushless);
 
@@ -68,8 +68,9 @@ public class MBRFSMv2 {
 		pivotMotor = new TalonFX(HardwareMap.DEVICE_ID_ARM_MOTOR);
 		pivotMotor.setNeutralMode(NeutralModeValue.Brake);
 
-		this.throughBore = throughBore;
+		throughBore = new Encoder(0, 1);
 		throughBore.reset();
+
 		timer = new Timer();
 		currLogs = new double[MechConstants.AVERAGE_SIZE];
 
@@ -279,6 +280,7 @@ public class MBRFSMv2 {
 	}
 
 	public void pidPivotAuto(double encoderFinal) {
+		System.out.println(throughBore.getDistance());
 		pivotMotor.set(pidAuto(throughBore.getDistance(), encoderFinal));
 	}
 

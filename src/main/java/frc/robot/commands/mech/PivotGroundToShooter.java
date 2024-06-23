@@ -43,24 +43,27 @@ public class PivotGroundToShooter extends Command {
 	@Override
 	public void initialize() {
 		mbrFSM.setIntakeMotorPower(MechConstants.AUTO_HOLDING_POWER);
+		timer.start();
 	}
 
 	// Called every time the scheduler runs while the command is scheduled.
 	@Override
 	public void execute() {
 		mbrFSM.pidPivotAuto(MechConstants.SHOOTER_ENCODER_ROTATIONS);
+		System.out.println("pgts");
+
 	}
 
 	// Called once the command ends or is interrupted.
 	@Override
 	public void end(boolean interrupted) {
-
+		timer.reset();
 	}
 
 	// Returns true when the command should end.
 	@Override
 	public boolean isFinished() {
-		return mbrFSM.pidPivotCompleted(MechConstants.SHOOTER_ENCODER_ROTATIONS);
+		return mbrFSM.pidPivotCompleted(MechConstants.SHOOTER_ENCODER_ROTATIONS) || timer.get() >= 0.25;
 	}
 
 	private double pidAuto(double currentEncoderPID, double targetEncoder) {
