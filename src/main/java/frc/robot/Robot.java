@@ -19,10 +19,8 @@ import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.trajectory.TrajectoryConfig;
 import edu.wpi.first.math.trajectory.TrajectoryGenerator;
-import edu.wpi.first.cscore.MjpegServer;
 import edu.wpi.first.cscore.UsbCamera;
 import edu.wpi.first.cscore.VideoMode;
-import edu.wpi.first.cscore.VideoSink;
 import edu.wpi.first.util.PixelFormat;
 
 // WPILib Imports
@@ -37,15 +35,11 @@ import edu.wpi.first.wpilibj2.command.SequentialCommandGroup;
 import edu.wpi.first.wpilibj2.command.SwerveControllerCommand;
 import frc.robot.SwerveConstants.AutoConstants;
 import frc.robot.SwerveConstants.DriveConstants;
-import edu.wpi.first.math.trajectory.Trajectory;
-import edu.wpi.first.wpilibj2.command.CommandScheduler;
 
 // Systems
 import frc.robot.systems.DriveFSMSystem;
-import frc.robot.systems.MBRFSMv2;
-
-//Commands
-import frc.robot.commands.
+import edu.wpi.first.math.trajectory.Trajectory;
+import edu.wpi.first.wpilibj2.command.CommandScheduler;
 
 /**
  * The VM is configured to automatically run this class, and to call the functions corresponding to
@@ -55,19 +49,9 @@ public class Robot extends TimedRobot {
 	private TeleopInput input;
 	// Systems
 	private DriveFSMSystem driveFSMSystem;
-	private MBRFSMv2 mbrfsMv2;
 	SendableChooser<Command> autoChooser;
 	Command autonomousCommand;
 	private final Field2d m_field = new Field2d();
-
-	private UsbCamera driverCam;
-	private UsbCamera aTagCam;
-	private UsbCamera noteCam;
-	private VideoSink videoSink;
-	private MjpegServer driverStream;
-	private MjpegServer aTagStream;
-	private MjpegServer noteStream;
-
 
 	/**
 	 * This function is run when the robot is first started up and should be used for any
@@ -78,18 +62,12 @@ public class Robot extends TimedRobot {
 		System.out.println("robotInit");
 		input = new TeleopInput();
 		driveFSMSystem = new DriveFSMSystem();
-		mbrfsMv2 = new MBRFSMv2();
 		autoChooser = AutoBuilder.buildAutoChooser();
 		SmartDashboard.putData("Auto Chooser", autoChooser);
 		SmartDashboard.putData("Field", m_field);
-
-		/*NamedCommands.registerCommand("autoBalance", swerve.autoBalanceCommand());
-		NamedCommands.registerCommand("exampleCommand", exampleSubsystem.exampleCommand());
-		NamedCommands.registerCommand("someOtherCommand", new SomeOtherCommand());*/
-
-		driverCam = CameraServer.startAutomaticCapture(0);
-		driverCam.setResolution(640, 480);
-		driverCam.setConnectionStrategy(ConnectionStrategy.kKeepOpen);
+		// NamedCommands.registerCommand("autoBalance", swerve.autoBalanceCommand());
+        // NamedCommands.registerCommand("exampleCommand", exampleSubsystem.exampleCommand());
+        // NamedCommands.registerCommand("someOtherCommand", new SomeOtherCommand());
 
 		// Instantiate all systems here
 	}
@@ -98,13 +76,10 @@ public class Robot extends TimedRobot {
 	@Override
 	public void autonomousInit() {
 		System.out.println("-------- Autonomous Init --------");
-		driveFSMSystem.resetAutonomus();
 		autonomousCommand = getAutonomousCommand();
+		driveFSMSystem.reset();
 		if (autonomousCommand != null) {
 			autonomousCommand.cancel();
-		}
-		// schedule the autonomous command (example)
-		if (autonomousCommand != null) {
 			autonomousCommand.schedule();
 		}
 	}
@@ -112,24 +87,22 @@ public class Robot extends TimedRobot {
 	@Override
 	public void autonomousPeriodic() {
 		CommandScheduler.getInstance().run();
-		// driveFSMSystem.updateAutonomous();
 		m_field.setRobotPose(driveFSMSystem.getPose());
 	}
 
 	@Override
 	public void teleopInit() {
 		System.out.println("-------- Teleop Init --------");
-		driveFSMSystem.reset();
-		mbrfsMv2.reset();
 		if (autonomousCommand != null) {
 			autonomousCommand.cancel();
 		}
+		driveFSMSystem.reset();
+		m_field.setRobotPose(driveFSMSystem.getPose());
 	}
 
 	@Override
 	public void teleopPeriodic() {
 		driveFSMSystem.update(input);
-		mbrfsMv2.update(input);
 	}
 
 	@Override
