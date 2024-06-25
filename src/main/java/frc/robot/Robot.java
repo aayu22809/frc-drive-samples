@@ -86,6 +86,7 @@ public class Robot extends TimedRobot {
 
 	@Override
 	public void autonomousPeriodic() {
+		System.out.println("AUTON RUNNING");
 		CommandScheduler.getInstance().run();
 		m_field.setRobotPose(driveFSMSystem.getPose());
 	}
@@ -119,10 +120,13 @@ public class Robot extends TimedRobot {
 	@Override
 	public void simulationInit() {
 		System.out.println("-------- Simulation Init --------");
+		m_field.setRobotPose(driveFSMSystem.getPose());
 	}
 
 	@Override
-	public void simulationPeriodic() { }
+	public void simulationPeriodic() { 
+		m_field.setRobotPose(driveFSMSystem.getPose());
+	}
 
 	// Do not use robotPeriodic. Use mode specific periodic methods instead.
 	@Override
