@@ -86,7 +86,7 @@ public class Robot extends TimedRobot {
 
 	@Override
 	public void autonomousPeriodic() {
-		System.out.println("AUTON RUNNING");
+		System.out.println("AUTON RUNNING" + driveFSMSystem.getPose().getX());
 		CommandScheduler.getInstance().run();
 		m_field.setRobotPose(driveFSMSystem.getPose());
 	}
