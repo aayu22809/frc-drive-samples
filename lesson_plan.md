@@ -1,3 +1,5 @@
+6/27/24 --Completed activity 1. 
+
 ## Activity 1: Setup Paths with Pathplanner
 
 ### PART A: Setup Apps and Repo
